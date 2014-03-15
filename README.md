@@ -33,9 +33,11 @@ Thanks
 [Ring](https://github.com/ring-clojure/ring)  
 [wheezy.http](https://bitbucket.org/akorn/wheezy.http)  
 [itty](https://github.com/toastdriven/itty)  
+[Colubrid](http://wsgiarea.pocoo.org/colubrid/downloads/)  
 [CherryPy](https://bitbucket.org/cherrypy/cherrypy/wiki/Home)  
 [Django](https://github.com/django/django)  
-[getting-started-with-wsgi](http://lucumr.pocoo.org/2007/5/21/getting-started-with-wsgi/)
+[getting-started-with-wsgi](http://lucumr.pocoo.org/2007/5/21/getting-started-with-wsgi/)  
+Some great ideas and codes may come from them.
 
 License
 -------
