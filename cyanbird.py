@@ -7,8 +7,6 @@ __all__ = ["GET", "POST", "Response", "response", "redirect",
 import re
 import os
 from functools import wraps
-from urlparse import parse_qs
-from urllib import quote
 from cgi import FieldStorage
 from datetime import datetime
 import time
@@ -32,7 +30,8 @@ if type("") is not type(b""):  # PY3
             return n.decode(encoding)
         return n
 
-    from http.cookie import SimpleCookie
+    from urllib.parse import parse_qs, quote
+    from http.cookies import SimpleCookie
     from io import BytesIO
 else:
     bytestr = str
@@ -57,6 +56,8 @@ else:
             return n.encode(encoding)
         return n
 
+    from urlparse import parse_qs
+    from urllib import quote
     from Cookie import SimpleCookie
     from cStringIO import StringIO as BytesIO
 
