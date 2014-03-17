@@ -350,7 +350,6 @@ class Response(object):
             self._cookies[key]["domain"] = domain
         if secure:
             self._cookies[key]["secure"] = secure
-        print self._cookies
 
     def delete_cookie(self, key):
         if self._cookies is None:
@@ -476,8 +475,6 @@ def serve_file(file, mimetype="", dir=""):
     f.write(open(serve_file, "rb").read())
     resp = Response(content_type=ctype)
     resp.write(f.getvalue())
-    print serve_file
-    base_path
     return resp
 
 
