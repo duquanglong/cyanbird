@@ -5,12 +5,14 @@ __author__ = "Zhao Wei <kaihaosw@gmail.com>"
 __all__ = ["GET", "POST", "Response", "response", "redirect",
            "not_found", "abort", "error", "run"]
 import re
+import os
 from functools import wraps
 from urlparse import parse_qs
 from urllib import quote
 from cgi import FieldStorage
 from datetime import datetime
 import time
+import mimetypes
 
 if type("") is not type(b""):  # PY3
     bytestr = bytes
@@ -30,7 +32,8 @@ if type("") is not type(b""):  # PY3
             return n.decode(encoding)
         return n
 
-    from Cookie import SimpleCookie
+    from http.cookie import SimpleCookie
+    from io import BytesIO
 else:
     bytestr = str
     unicodestr = unicode
@@ -55,6 +58,7 @@ else:
         return n
 
     from Cookie import SimpleCookie
+    from cStringIO import StringIO as BytesIO
 
 
 def assert_native(n):
@@ -455,6 +459,26 @@ def error(code):
     def wrapper(f):
         _ERROR_MAPPINGS[code] = f
     return wrapper
+
+
+# serve static files
+def serve_file(file, mimetype="", dir=""):
+    base_path = os.path.abspath(os.path.dirname(__file__))
+    serve_file = os.path.realpath(os.path.join(base_path, dir, file))
+    if not serve_file.startswith(base_path):
+        raise Exception("Operation denied.")
+    if not os.path.exists(serve_file):
+        raise Exception("File %s not exists." % file)
+    if not os.access(serve_file, os.R_OK):
+        raise Exception("Have no access to read %s." % file)
+    ctype = mimetype or mimetypes.guess_type(serve_file)[0] or "text/plain"
+    f = BytesIO()
+    f.write(open(serve_file, "rb").read())
+    resp = Response(content_type=ctype)
+    resp.write(f.getvalue())
+    print serve_file
+    base_path
+    return resp
 
 
 # adapter
