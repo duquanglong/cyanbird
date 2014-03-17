@@ -23,6 +23,10 @@ TODO
 ----
 It is still under development. Please join me.
 
+* delete, put, head
+* static_file
+* template
+* upload file
 * cache
 * some other adapters
 * ajax
