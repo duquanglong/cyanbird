@@ -371,7 +371,6 @@ def http_error(code, body=""):
     resp = Response(code=code)
     if code == 404:
         resp.write(body)
-        print "abc"
     return resp
 
 bad_request = http_error(400)
@@ -458,11 +457,11 @@ _ADAPTER = {
 
 
 # server
-def run(host="127.0.0.1", port=8080, adapter="wsgiref"):
+def run(host="127.0.0.1", port=8080, server="wsgiref"):
     try:
-        f = _ADAPTER[adapter]
+        f = _ADAPTER[server]
     except KeyError:
-        raise KeyError("The adapter %s is not exists!" % adapter)
+        raise KeyError("The server %s is not exists!" % server)
     try:
         print("Please visit http//:%s:%s" % (host, port))
         print("Press Ctrl+c Ctrl+c to interrupt")
