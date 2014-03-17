@@ -23,10 +23,9 @@ TODO
 ----
 It is still under development. Please join me.
 
-* cookie
 * cache
-* serve static files
 * some other adapters
+* ajax
 
 Thanks
 ------
