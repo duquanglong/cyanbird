@@ -3,7 +3,7 @@ __license__ = "MIT"
 __version__ = "0.1"
 __author__ = "Zhao Wei <kaihaosw@gmail.com>"
 __all__ = ["GET", "POST", "Response", "response", "redirect",
-           "not_found", "abort", "error", "run"]
+           "not_found", "abort", "error", "serve_file", "run"]
 import re
 import os
 from functools import wraps
@@ -248,11 +248,10 @@ def _add_slash(url, end=True):
     if end:
         if not url.endswith("/"):
             url += "/"
-        return url
     else:
         if not url.startswith("/"):
             url = "/" + url
-        return url
+    return url
 
 
 class Request(object):
@@ -413,7 +412,10 @@ def application_handler(env, start_response):
     """ The handler for request and response.
     """
     request = Request(env)
-    for re_url, callback in _REQUEST_MAPPINGS[request.method]:
+    if request.method not in _REQUEST_MAPPINGS:
+        raise Exception("The request method: %s is not supported." %
+                        request.method)
+    for re_url, callback in _REQUEST_MAPPINGS.get(request.method):
         match = re_url.search(request.path)
         if match:
             kwargs = match.groupdict()

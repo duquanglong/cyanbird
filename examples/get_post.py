@@ -4,6 +4,10 @@ from cyanbird import GET, POST, response, run
 def index(request):
     return response("hello cyanbird")
 
+@GET("/", base="admin")
+def admin(request):
+    return response("hello cyanbird admin")
+
 @GET("/index")
 def pt(request):
     html = """
@@ -21,7 +25,7 @@ def pt2(request):
     p = request.forms.get("p", None)
     return response("text and password are %s and %s" % (t, p))
 
-@GET("/(?P<name>.+)")
+@GET("/(?P<name>\w{4})")
 def hello(request, name):
     return response("hello %s" % name)
 
