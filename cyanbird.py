@@ -2,7 +2,7 @@
 __license__ = "MIT"
 __version__ = "0.1"
 __author__ = "Zhao Wei <kaihaosw@gmail.com>"
-__all__ = ["GET", "POST", "Response", "response", "redirect", "not_found", "run"]
+# __all__ = ["GET", "POST", "Response", "response", "redirect", "not_found", "run"]
 import re
 from functools import wraps
 from urlparse import parse_qs
@@ -364,6 +364,22 @@ class Response(object):
         return self._response
 
 
+def http_error(code, body=""):
+    """ Return a error based on the status_code.
+    """
+    assert code >= 400 and code <= 505
+    resp = Response(code=code)
+    if code == 404:
+        resp.write(body)
+        print "abc"
+    return resp
+
+bad_request = http_error(400)
+forbidden = http_error(403)
+not_found = http_error(404, body="Not Found")
+internal_error = http_error(500)
+
+
 def response(body):
     """ Return a response for `200 OK` response.
     """
@@ -377,14 +393,6 @@ def redirect(url):
     """
     resp = Response(code=302)
     resp.redirect(url)
-    return resp
-
-
-def not_found(body="Not Found"):
-    """ Return a response for an HTTP `404 not found`.
-    """
-    resp = Response(code=404, content_type="text/plain")
-    resp.write(body)
     return resp
 
 
@@ -409,7 +417,7 @@ def application_handler(env, start_response):
                 response.write(resp)
                 return response(start_response)
             return resp(start_response)
-    return not_found()(start_response)
+    return not_found(start_response)
 
 
 # route decorators
