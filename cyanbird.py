@@ -2,13 +2,14 @@
 __license__ = "MIT"
 __version__ = "0.1"
 __author__ = "Zhao Wei <kaihaosw@gmail.com>"
-__all__ = ["GET", "POST", "response", "redirect", "not_found", "run"]
+__all__ = ["GET", "POST", "Response", "response", "redirect", "not_found", "run"]
 import re
 from functools import wraps
 from urlparse import parse_qs
 from urllib import quote
 from cgi import FieldStorage
-
+from datetime import datetime
+import time
 
 if type("") is not type(b""):  # PY3
     bytestr = bytes
@@ -27,6 +28,8 @@ if type("") is not type(b""):  # PY3
         if isinstance(n, bytes):
             return n.decode(encoding)
         return n
+
+    from Cookie import SimpleCookie
 else:
     bytestr = str
     unicodestr = unicode
@@ -49,6 +52,8 @@ else:
         if isinstance(n, unicode):
             return n.encode(encoding)
         return n
+
+    from Cookie import SimpleCookie
 
 
 def assert_native(n):
@@ -217,6 +222,20 @@ def _parse_multipart(fp, ctype, clength):
     return form, files
 
 
+def _format_gmt_time(t):
+    """ Parse a time to `Weekday, DD-Mon-YY HH:MM:SS GMT`.
+    """
+    if isinstance(t, time.struct_time):
+        pass
+    elif isinstance(t, datetime):
+        t = t.utctimetuple()
+    elif isinstance(t, (int, long)):
+        t = time.gmtime(t)
+    else:
+        raise Exception("Expires format is illegal.")
+    return time.strftime("%a, %d %b %Y %H:%M:%S GMT", t)
+
+
 def _add_slash(url, end=True):
     """ Add a slash at the end or front of the url.
     """
@@ -260,7 +279,21 @@ class Request(object):
     def args(self):
         return _parse_qs(tonative(self.env.get("QUERY_STRING", "")))
 
-    # TODO cookies
+    @lazyproperty
+    def cookies(self):
+        if not hasattr(self, "_cookies"):
+            self._cookies = SimpleCookie()
+            if self.env.get("HTTP_COOKIE", None):
+                try:
+                    self._cookies.load(tonative(self.env["HTTP_COOKIE"]))
+                except Exception:
+                    self._cookies = None
+        return self._cookies
+
+    def get_cookie(self, key, default=None):
+        if self.cookies and key in self.cookies:
+            return self.cookies[key].value
+        return default
 
     @lazyproperty
     def forms(self):
@@ -295,14 +328,38 @@ class Response(object):
         self.headers.append(("Location", url))
 
     def write(self, msg):
-        # if isinstance(msg, nativestr):
         self._response.append(tonative(msg))
-        # else:
-        #     raise TypeError("str or unicode required")
+
+    def set_cookie(self, key, value="", max_age=None, expires=None,
+                   path="/", domain=None, secure=None):
+        if not hasattr(self, "_cookies"):
+            self._cookies = SimpleCookie()
+        self._cookies[key] = value
+        if max_age:
+            self._cookies[key]["max-age"] = max_age
+        if expires:
+            self._cookies[key]["expires"] = _format_gmt_time(expires)
+        if path:
+            self._cookies[key]["path"] = path
+        if domain:
+            self._cookies[key]["domain"] = domain
+        if secure:
+            self._cookies[key]["secure"] = secure
+        print self._cookies
+
+    def delete_cookie(self, key):
+        if self._cookies is None:
+            self._cookies = SimpleCookie()
+        if not key in self._cookies:
+            self._cookies[key] = ""
+        self._cookies[key]["max-age"] = 0
 
     def __call__(self, start_response):
         self.headers.append(("Content-Length",
                              str(sum(len(n) for n in self._response))))
+        if hasattr(self, "_cookies"):
+            for morsel in self._cookies.values():
+                self.headers.append(("Set-Cookie", morsel.output(header="")))
         start_response(self.status, self.headers)
         return self._response
 
