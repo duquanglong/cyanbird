@@ -2,7 +2,8 @@
 __license__ = "MIT"
 __version__ = "0.1"
 __author__ = "Zhao Wei <kaihaosw@gmail.com>"
-# __all__ = ["GET", "POST", "Response", "response", "redirect", "not_found", "run"]
+__all__ = ["GET", "POST", "Response", "response", "redirect",
+           "not_found", "abort", "error", "run"]
 import re
 from functools import wraps
 from urlparse import parse_qs
@@ -364,21 +365,6 @@ class Response(object):
         return self._response
 
 
-def http_error(code, body=""):
-    """ Return a error based on the status_code.
-    """
-    assert code >= 400 and code <= 505
-    resp = Response(code=code)
-    if code == 404:
-        resp.write(body)
-    return resp
-
-bad_request = http_error(400)
-forbidden = http_error(403)
-not_found = http_error(404, body="Not Found")
-internal_error = http_error(500)
-
-
 def response(body):
     """ Return a response for `200 OK` response.
     """
@@ -395,11 +381,28 @@ def redirect(url):
     return resp
 
 
+def http_error(code, body=""):
+    """ Return a error based on the status_code.
+    """
+    assert code >= 400 and code <= 505
+    resp = Response(code=code)
+    if code == 404:
+        resp.write(body)
+    return resp
+
+bad_request = http_error(400)
+forbidden = http_error(403)
+not_found = http_error(404, body="Not Found")
+abort = http_error(500)
+
+
 # handler
 _REQUEST_MAPPINGS = {
     "GET": [],
     "POST": []
 }
+
+_ERROR_MAPPINGS = {}
 
 
 def application_handler(env, start_response):
@@ -416,6 +419,10 @@ def application_handler(env, start_response):
                 response.write(resp)
                 return response(start_response)
             return resp(start_response)
+    if _ERROR_MAPPINGS.get(404, None):
+        resp = Response()
+        resp.write(_ERROR_MAPPINGS[404]())
+        return resp(start_response)
     return not_found(start_response)
 
 
@@ -442,6 +449,12 @@ def POST(url, base=""):
     """ The `POST` decorator.
     """
     return _route_abstract("POST", url, base=base)
+
+
+def error(code):
+    def wrapper(f):
+        _ERROR_MAPPINGS[code] = f
+    return wrapper
 
 
 # adapter
