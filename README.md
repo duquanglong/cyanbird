@@ -2,6 +2,7 @@ Cyanbird
 ========
 Cyanbird is a mythical bird in the book *Classic of Mountains and Seas*. It's the messenger of happiness.  
 It is aslo a microframework written in Python.  
+![Travis CI](https://travis-ci.org/zhaov/cyanbird.png?branch=master)  
 
 Examples
 --------
