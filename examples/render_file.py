@@ -2,7 +2,6 @@ from cyanbird import render, GET, run
 
 @GET("/")
 def index(request):
-    return render("index.html", "templates",
-                  dict(title="built-in template", page="main"))
+    return render("templates/index.html", dict(title="built-in template", page="main"))
 
 run()

@@ -491,10 +491,11 @@ def serve_file(file, dir, mimetype=""):
     return resp
 
 
-def render(file, dir, params):
+def render(file, params):
     """ Simple template using the built-in string.Template
     """
-    serve_file = _check_file(file, dir)
+    dirname, filename = os.path.split(file)
+    serve_file = _check_file(filename, dirname)
     ctype = mimetypes.guess_type(serve_file)[0] or "text/plain"
     s = Template(open(serve_file, "rb").read()).substitute(params)
     resp = Response(content_type=ctype)
