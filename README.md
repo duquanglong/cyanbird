@@ -20,6 +20,7 @@ Installation
 
 Documentation
 ------------
+[Documentation](https://github.com/zhaov/cyanbird/wiki/_pages)  
 
 TODO
 ----
