@@ -26,7 +26,6 @@ TODO
 It is still under development. Please join me.
 
 * delete, put, head
-* template
 * upload file
 * cache
 * some other adapters

@@ -2,8 +2,8 @@
 __license__ = "MIT"
 __version__ = "0.1"
 __author__ = "Zhao Wei <kaihaosw@gmail.com>"
-__all__ = ["GET", "POST", "Response", "response", "redirect",
-           "not_found", "abort", "error", "serve_file", "run"]
+__all__ = ["GET", "POST", "Response", "response", "redirect", "not_found",
+           "abort", "error", "serve_file", "render", "run"]
 import re
 import os
 from functools import wraps
@@ -11,6 +11,7 @@ from cgi import FieldStorage
 from datetime import datetime
 import time
 import mimetypes
+from string import Template
 
 if type("") is not type(b""):  # PY3
     bytestr = bytes
@@ -464,7 +465,9 @@ def error(code):
 
 
 # serve static files
-def serve_file(file, dir, mimetype=""):
+def _check_file(file, dir):
+    """ Check if the given file has the permission.
+    """
     base_path = os.path.abspath(dir)
     serve_file = os.path.realpath(os.path.join(base_path, file))
     if not serve_file.startswith(base_path):
@@ -473,11 +476,29 @@ def serve_file(file, dir, mimetype=""):
         raise Exception("File %s not exists." % file)
     if not os.access(serve_file, os.R_OK):
         raise Exception("Have no access to read %s." % file)
+    return serve_file
+
+
+def serve_file(file, dir, mimetype=""):
+    """ Serve a static file.
+    """
+    serve_file = _check_file(file, dir)
     ctype = mimetype or mimetypes.guess_type(serve_file)[0] or "text/plain"
     f = BytesIO()
     f.write(open(serve_file, "rb").read())
     resp = Response(content_type=ctype)
     resp.write(f.getvalue())
+    return resp
+
+
+def render(file, dir, params):
+    """ Simple template using the built-in string.Template
+    """
+    serve_file = _check_file(file, dir)
+    ctype = mimetypes.guess_type(serve_file)[0] or "text/plain"
+    s = Template(open(serve_file, "rb").read()).substitute(params)
+    resp = Response(content_type=ctype)
+    resp.write(s)
     return resp
 
 
