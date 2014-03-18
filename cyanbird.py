@@ -464,9 +464,9 @@ def error(code):
 
 
 # serve static files
-def serve_file(file, mimetype="", dir=""):
-    base_path = os.path.abspath(os.path.dirname(__file__))
-    serve_file = os.path.realpath(os.path.join(base_path, dir, file))
+def serve_file(file, dir, mimetype=""):
+    base_path = os.path.abspath(dir)
+    serve_file = os.path.realpath(os.path.join(base_path, file))
     if not serve_file.startswith(base_path):
         raise Exception("Operation denied.")
     if not os.path.exists(serve_file):
