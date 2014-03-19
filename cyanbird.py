@@ -334,7 +334,7 @@ class Response(object):
         self.headers.append(("Location", url))
 
     def write(self, msg):
-        self._response.append(tonative(msg))
+        self._response.append(ntob(msg))
 
     def set_cookie(self, key, value="", max_age=None, expires=None,
                    path="/", domain=None, secure=None):
@@ -485,7 +485,7 @@ def serve_file(file, dir, mimetype=""):
     serve_file = _check_file(file, dir)
     ctype = mimetype or mimetypes.guess_type(serve_file)[0] or "text/plain"
     f = BytesIO()
-    f.write(open(serve_file, "rb").read())
+    f.write(open(serve_file, "r").read())
     resp = Response(content_type=ctype)
     resp.write(f.getvalue())
     return resp
@@ -497,7 +497,7 @@ def render(file, params):
     dirname, filename = os.path.split(file)
     serve_file = _check_file(filename, dirname)
     ctype = mimetypes.guess_type(serve_file)[0] or "text/plain"
-    s = Template(open(serve_file, "rb").read()).substitute(params)
+    s = Template(tonative(open(serve_file, "r").read())).substitute(params)
     resp = Response(content_type=ctype)
     resp.write(s)
     return resp
