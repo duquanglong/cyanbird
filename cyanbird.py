@@ -223,7 +223,7 @@ class Request(object):
 
     @lazyproperty
     def method(self):
-        return self.env["REQUEST_METHOD"].upper()
+        return self.env.get("REQUEST_METHOD", "GET").upper()
 
     @lazyproperty
     def path(self):
@@ -358,27 +358,59 @@ _REQUEST_MAPPINGS = {
 _ERROR_MAPPINGS = {}
 
 
+# Exception
+class CyanBirdException(Exception):
+    """ Basic Exception for cyanbird.
+    """
+    def __init__(self, msg):
+        super(CyanBirdException, self).__init__(msg)
+
+    def __str__(self):
+        return self.msg
+
+
+class HTTPError(CyanBirdException):
+    def __init__(self, code, msg):
+        self.status_code, self.msg = code, msg
+
+    def __str__(self):
+        return self.msg
+
+
+# app
+def _match_url(request):
+    if request.method not in _REQUEST_MAPPINGS:
+        raise CyanBirdException("The request method: %s is not supported." %
+                                request.method)
+    for re_url, callback in _REQUEST_MAPPINGS[request.method]:
+        match = re_url.search(request.path)
+        if match is not None:
+            return re_url, callback, match.groupdict()
+    raise HTTPError(404, "Not Found")
+
+
 def application_handler(env, start_response):
     """ The handler for request and response.
     """
     request = Request(env)
-    if request.method not in _REQUEST_MAPPINGS:
-        raise Exception("The request method: %s is not supported." %
-                        request.method)
-    for re_url, callback in _REQUEST_MAPPINGS.get(request.method):
-        match = re_url.search(request.path)
-        if match:
-            kwargs = match.groupdict()
+    try:
+        re_url, callback, kwargs = _match_url(request)
+        if callback is not None:
             resp = callback(request, **kwargs)
             if not isinstance(resp, Response):
                 response = Response()
                 response.write(resp)
                 return response(start_response)
             return resp(start_response)
-    if _ERROR_MAPPINGS.get(404, None):
-        resp = Response()
-        resp.write(_ERROR_MAPPINGS[404]())
-        return resp(start_response)
+    except Exception as e:
+        if isinstance(e, HTTPError):
+            status_code = getattr(e, "status_code", 404)
+        else:
+            status_code = 500
+        if status_code in _ERROR_MAPPINGS:
+            resp = Response(code=404)
+            resp.write(_ERROR_MAPPINGS[status_code]())
+            return resp(start_response)
     return not_found(start_response)
 
 
