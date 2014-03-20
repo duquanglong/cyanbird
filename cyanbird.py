@@ -11,62 +11,11 @@ from cgi import FieldStorage
 from datetime import datetime
 import time
 import mimetypes
+from urlparse import parse_qs
+from urllib import quote
+from Cookie import SimpleCookie
+from cStringIO import StringIO as BytesIO
 from string import Template
-
-if type("") is not type(b""):  # PY3
-    bytestr = bytes
-    unicodestr = str
-    nativestr = unicodestr
-
-    def ntob(n, encoding='ISO-8859-1'):
-        assert_native(n)
-        return n.encode(encoding)
-
-    def ntou(n, encoding='ISO-8859-1'):
-        assert_native(n)
-        return n
-
-    def tonative(n, encoding='ISO-8859-1'):
-        if isinstance(n, bytes):
-            return n.decode(encoding)
-        return n
-
-    from urllib.parse import parse_qs, quote
-    from http.cookies import SimpleCookie
-    from io import BytesIO
-else:
-    bytestr = str
-    unicodestr = unicode
-    nativestr = bytestr
-
-    def ntob(n, encoding='ISO-8859-1'):
-        assert_native(n)
-        return n
-
-    def ntou(n, encoding='ISO-8859-1'):
-        assert_native(n)
-        if encoding == 'escape':
-            return unicode(
-                re.sub(r'\\u([0-9a-zA-Z]{4})',
-                       lambda m: unichr(int(m.group(1), 16)),
-                       n.decode('ISO-8859-1')))
-        return n.decode(encoding)
-
-    def tonative(n, encoding='ISO-8859-1'):
-        if isinstance(n, unicode):
-            return n.encode(encoding)
-        return n
-
-    from urlparse import parse_qs
-    from urllib import quote
-    from Cookie import SimpleCookie
-    from cStringIO import StringIO as BytesIO
-
-
-def assert_native(n):
-    if not isinstance(n, nativestr):
-        raise TypeError("n must be a native str (got %s)" % type(n).__name__)
-
 
 _HTTP_STATUS = {
     100: "100 Continue",
@@ -283,7 +232,7 @@ class Request(object):
 
     @lazyproperty
     def args(self):
-        return _parse_qs(tonative(self.env.get("QUERY_STRING", "")))
+        return _parse_qs(self.env.get("QUERY_STRING", ""))
 
     @lazyproperty
     def cookies(self):
@@ -291,7 +240,7 @@ class Request(object):
             self._cookies = SimpleCookie()
             if self.env.get("HTTP_COOKIE", None):
                 try:
-                    self._cookies.load(tonative(self.env["HTTP_COOKIE"]))
+                    self._cookies.load(self.env["HTTP_COOKIE"])
                 except Exception:
                     self._cookies = None
         return self._cookies
@@ -334,7 +283,7 @@ class Response(object):
         self.headers.append(("Location", url))
 
     def write(self, msg):
-        self._response.append(ntob(msg))
+        self._response.append(msg)
 
     def set_cookie(self, key, value="", max_age=None, expires=None,
                    path="/", domain=None, secure=None):
@@ -447,18 +396,20 @@ def _route_abstract(method, url, base=""):
 
 
 def GET(url, base=""):
-    """ The `GET` decorator.
+    """ The `GET` wrapper.
     """
     return _route_abstract("GET", url, base=base)
 
 
 def POST(url, base=""):
-    """ The `POST` decorator.
+    """ The `POST` wrapper.
     """
     return _route_abstract("POST", url, base=base)
 
 
 def error(code):
+    """ The 'error' wrapper.
+    """
     def wrapper(f):
         _ERROR_MAPPINGS[code] = f
     return wrapper
@@ -497,7 +448,7 @@ def render(file, params):
     dirname, filename = os.path.split(file)
     serve_file = _check_file(filename, dirname)
     ctype = mimetypes.guess_type(serve_file)[0] or "text/plain"
-    s = Template(tonative(open(serve_file, "r").read())).substitute(params)
+    s = Template(open(serve_file, "r").read()).substitute(params)
     resp = Response(content_type=ctype)
     resp.write(s)
     return resp
