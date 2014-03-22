@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
 __license__ = "MIT"
-__version__ = "0.1"
+__version__ = "0.20"
 __author__ = "Zhao Wei <kaihaosw@gmail.com>"
-__all__ = ["GET", "POST", "Response", "response", "redirect", "not_found",
-           "abort", "error", "serve_file", "render", "run"]
 import re
 import os
 from functools import wraps
@@ -17,54 +15,28 @@ from Cookie import SimpleCookie
 from cStringIO import StringIO as BytesIO
 from string import Template
 
-_HTTP_STATUS = {
-    100: "100 Continue",
-    101: "101 Switching Protocols",
-    200: "200 OK",
-    201: "201 Created",
-    202: "202 Accepted",
-    203: "203 Non-Authoritative Information",
-    204: "204 No Content",
-    205: "205 Reset Content",
-    206: "206 Partial Content",
-    207: "207 Multi-Status",
-    300: "300 Multiple Choices",
-    301: "301 Moved Permanently",
-    302: "302 Found",
-    303: "303 See Other",
-    304: "304 Not Modified",
-    305: "305 Use Proxy",
-    307: "307 Temporary Redirect",
-    400: "400 Bad Request",
-    401: "401 Unauthorized",
-    402: "402 Payment Required",
-    403: "403 Forbidden",
-    404: "404 Not Found",
-    405: "405 Method Not Allowed",
-    406: "406 Not Acceptable",
-    407: "407 Proxy Authentication Required",
-    408: "408 Request Timeout",
-    409: "409 Conflict",
-    410: "410 Gone",
-    411: "411 Length Required",
-    412: "412 Precondition Failed",
-    413: "413 Request Entity Too Large",
-    414: "414 Request-Uri Too Long",
-    415: "415 Unsupported Media Type",
-    416: "416 Requested Range Not Satisfiable",
-    417: "417 Expectation Failed",
-    500: "500 Internal Server Error",
-    501: "501 Not Implemented",
-    502: "502 Bad Gateway",
-    503: "503 Service Unavailable",
-    504: "504 Gateway Timeout",
-    505: "505 Http Version Not Supported"
-}
+
+##,-------------------------------
+##| Cyanbird Exceptions and Errors
+##`-------------------------------
+class CyanBirdException(Exception):
+    """ Basic Exception for cyanbird. """
+    pass
 
 
+class HTTPError(CyanBirdException):
+    def __init__(self, code, msg):
+        self.status_code, self.msg = code, msg
+
+    def __str__(self):
+        return self.status_code, self.msg
+
+
+##,---------------
+##| Cyanbird utils
+##`---------------
 class MultiValueDict(dict):
-    """ MultiValueDict from Django.
-    """
+    """ MultiValueDict from Django. """
     def __init__(self, key_to_list_mapping=()):
         super(MultiValueDict, self).__init__(key_to_list_mapping)
 
@@ -139,8 +111,7 @@ class MultiValueDict(dict):
 
 
 def lazyproperty(f):
-    """ Class decorator which evals only once.
-    """
+    """ Class decorator which evals only once. """
     attr_name = "_lazy_" + f.__name__
 
     @property
@@ -153,15 +124,13 @@ def lazyproperty(f):
 
 
 def _parse_qs(s):
-    """ Parse a query_string and return a MultidictValue type dict.
-    """
+    """ Parse a query_string and return a MultidictValue type dict. """
     qs = parse_qs(s, keep_blank_values=True)
     return MultiValueDict(qs)
 
 
 def _parse_multipart(fp, ctype, clength):
-    """ Parse multipart/form-data request. Returns a tuple (form, files).
-    """
+    """ Parse multipart/form-data request. Returns a tuple (form, files). """
     fs = FieldStorage(fp=fp,
                       environ={"REQUEST_METHOD": "POST"},
                       headers={"content-type": ctype,
@@ -179,8 +148,7 @@ def _parse_multipart(fp, ctype, clength):
 
 
 def _format_gmt_time(t):
-    """ Parse a time to `Weekday, DD-Mon-YY HH:MM:SS GMT`.
-    """
+    """ Parse a time to `Weekday, DD-Mon-YY HH:MM:SS GMT`. """
     if isinstance(t, time.struct_time):
         pass
     elif isinstance(t, datetime):
@@ -193,8 +161,7 @@ def _format_gmt_time(t):
 
 
 def _add_slash(url, end=True):
-    """ Add a slash at the end or front of the url.
-    """
+    """ Add a slash at the end or front of the url. """
     if end:
         if not url.endswith("/"):
             url += "/"
@@ -204,9 +171,55 @@ def _add_slash(url, end=True):
     return url
 
 
+##,--------------
+##| Cyanbird main
+##`--------------
+class Cyanbird(object):
+    def __init__(self, path=""):
+        self.path = os.path.abspath(path)
+        self.routes = []
+        self.errors = {}
+
+    def route(self, url, method="GET"):
+        def wrapper(f):
+            self.routes.append(Route(url, f, method))
+            return f
+        return wrapper
+
+    def error(self, code):
+        def wrapper(f):
+            self.errors[code] = (Error(code, f))
+            return f
+        return wrapper
+
+    def wsgi(self, env, start_response):
+        request = Request(env)
+        for route in self.routes:
+            if route.match(request) is not None:
+                resp = route.dispatch(request)
+                if not isinstance(resp, Response):
+                    response = Response()
+                    response.write(resp)
+                    return response(start_response)
+                return resp(start_response)
+        resp = self.errors[404]()
+        response = Response(404)
+        response.write(resp)
+        return response(start_response)
+
+    def __call__(self, env, start_response):
+        return self.wsgi(env, start_response)
+
+    def run(self, host="127.0.0.1", port=8080, debug=False, reload=False):
+        from wsgiref.simple_server import make_server
+        make_server(app=self, host=host, port=port).serve_forever()
+
+
+##,------------------
+##| Cyanbird Requests
+##`------------------
 class Request(object):
-    """ Request object which handlers the `environ`.
-    """
+    """ Request object which handlers the `environ`. """
     def __init__(self, env):
         self.env = env
 
@@ -271,6 +284,26 @@ class Request(object):
                                                        self.clength)
         else:
             self._forms, self._file = None, None
+
+
+##,-------------------
+##| Cyanbird Responses
+##`-------------------
+_HTTP_STATUS = {
+    200: "200 OK",
+    201: "201 Created",
+    300: "300 Multiple Choices",
+    301: "301 Moved Permanently",
+    302: "302 Found",
+    303: "303 See Other",
+    304: "304 Not Modified",
+    307: "307 Temporary Redirect",
+    400: "400 Bad Request",
+    403: "403 Forbidden",
+    404: "404 Not Found",
+    405: "405 Method Not Allowed",
+    410: "410 Gone",
+    500: "500 Internal Server Error"}
 
 
 class Response(object):
@@ -349,6 +382,45 @@ not_found = http_error(404, body="Not Found")
 abort = http_error(500)
 
 
+##,---------------
+##| Cyanbird Route
+##`---------------
+class Route(object):
+    def __init__(self, re_url, f, method="GET"):
+        self.url = re_url
+        self.re_url = re.compile(r"^%s$" % _add_slash(re_url))
+        self.f = f
+        self.method = method
+        self.params = {}
+
+    def match(self, request):
+        if isinstance(self.method, str):
+            if self.method.upper() != request.method:
+                raise Exception("Method %s not allowed." % self.method)
+        if isinstance(self.method, list):
+            if request.method not in self.method:
+                raise Exception("Methods %s not allowed." % self.method)
+        match = self.re_url.search(request.path)
+        if match is not None:
+            self.params.update(match.groupdict())
+            return True
+        return None
+
+    def dispatch(self, request):
+        return self.f(request, **self.params)
+
+
+##,-----------------------
+##| Cyanbird Errors Object
+##`-----------------------
+class Error(object):
+    def __init__(self, code, f):
+        self.status_code = code
+        self.f = f
+
+    def __call__(self):
+        return self.f()
+
 # handler
 _REQUEST_MAPPINGS = {
     "GET": [],
@@ -358,30 +430,11 @@ _REQUEST_MAPPINGS = {
 _ERROR_MAPPINGS = {}
 
 
-# Exception
-class CyanBirdException(Exception):
-    """ Basic Exception for cyanbird.
-    """
-    def __init__(self, msg):
-        super(CyanBirdException, self).__init__(msg)
-
-    def __str__(self):
-        return self.msg
-
-
-class HTTPError(CyanBirdException):
-    def __init__(self, code, msg):
-        self.status_code, self.msg = code, msg
-
-    def __str__(self):
-        return self.msg
-
-
 # app
 def _match_url(request):
     if request.method not in _REQUEST_MAPPINGS:
-        raise CyanBirdException("The request method: %s is not supported." %
-                                request.method)
+        raise Exception("The request method: %s is not supported." %
+                        request.method)
     for re_url, callback in _REQUEST_MAPPINGS[request.method]:
         match = re_url.search(request.path)
         if match is not None:

@@ -7,13 +7,6 @@ It is aslo a micro framework written in Python.
 
 Examples
 --------
-    from cyanbird import GET, response, run
-
-    @GET("/")
-    def index(request):
-        return response("Hello Cyanbird!")
-
-    run()
 
 Installation
 ------------
@@ -24,12 +17,8 @@ Documentation
 
 TODO
 ----
-It is still under development. Please join me.
-
-* upload file
-* cache
-* some other adapters
-* ajax
+Version 0.2 is under development.  
+Please join me.
 
 Thanks
 ------
