@@ -173,6 +173,7 @@ class ServerAdapter(object):
 
 
 class WSGIRefServer(ServerAdapter):
+    """ WSGIRef server from the built-in wsgiref library. """
     def run(self, handler):
         from wsgiref.simple_server import make_server
         server = make_server(app=handler, host=self.host, port=self.port)
@@ -183,6 +184,7 @@ class WSGIRefServer(ServerAdapter):
 ##| Cyanbird main
 ##`--------------
 class Cyanbird(object):
+    """ Cyanbird """
     def __init__(self, path=""):
         self.path = os.path.abspath(path)
         self.routes = []
@@ -340,6 +342,7 @@ _HTTP_STATUS = {
 
 
 class Response(object):
+    """ Response object which `start_response`. """
     def bind(self, code=200, content_type="text/html; charset=UTF-8"):
         self.status = _HTTP_STATUS.get(code, "UNKNOWN")
         self.headers = [("Content-Type", content_type)]
@@ -388,6 +391,7 @@ class Response(object):
 ##| Cyanbird Route
 ##`---------------
 class Route(object):
+    """ Single route object. """
     def __init__(self, re_url, f, method="GET"):
         self.url = re_url
         self.re_url = re.compile(r"^%s$" % _add_slash(re_url))
@@ -416,6 +420,7 @@ class Route(object):
 ##| Cyanbird Errors Object
 ##`-----------------------
 class Error(object):
+    """ Single error object. """
     def __init__(self, code, f):
         self.status_code = code
         self.f = f
@@ -424,9 +429,9 @@ class Error(object):
         return self.f()
 
 
-##,---------------
-##| Cyanbird basic
-##`---------------
+##,---------------------------
+##| Cyanbird application basic
+##`---------------------------
 _request = Request()
 _response = Response()
 _app = Cyanbird()
@@ -477,8 +482,7 @@ def http_error(code, body=""):
 
 # serve static files
 def _check_file(file, dir):
-    """ Check if the given file has the permission.
-    """
+    """ Check if the given file has the permission. """
     base_path = os.path.abspath(dir)
     serve_file = os.path.realpath(os.path.join(base_path, file))
     if not serve_file.startswith(base_path):
@@ -491,8 +495,7 @@ def _check_file(file, dir):
 
 
 def serve_file(file, dir, mimetype=""):
-    """ Serve a static file.
-    """
+    """ Serve a static file. """
     serve_file = _check_file(file, dir)
     ctype = mimetype or mimetypes.guess_type(serve_file)[0] or "text/plain"
     f = BytesIO()
@@ -503,8 +506,7 @@ def serve_file(file, dir, mimetype=""):
 
 
 def render(file, params):
-    """ Simple template using the built-in string.Template
-    """
+    """ Simple template using the built-in string.Template """
     dirname, filename = os.path.split(file)
     serve_file = _check_file(filename, dirname)
     ctype = mimetypes.guess_type(serve_file)[0] or "text/plain"
@@ -516,6 +518,7 @@ def render(file, params):
 
 def run(app=_app, server=WSGIRefServer, host="127.0.0.1", port=8080,
         debug=False, reload=False):
+    """ Run the application with the giver params. """
     try:
         print("Cyanbird v%s is running." % __version__)
         print("Please visit http://%s:%s" % (host, port))
