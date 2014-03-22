@@ -172,6 +172,18 @@ class Cyanbird(object):
             return f
         return wrapper
 
+    def get(self, url):
+        return self.route(url, method="GET")
+
+    def post(self, url):
+        return self.route(url, method="POST")
+
+    def put(self, url):
+        return self.route(url, method="PUT")
+
+    def delete(self, url):
+        return self.route(url, method="DELETE")
+
     def error(self, code):
         def wrapper(f):
             self.errors[code] = (Error(code, f))
@@ -354,6 +366,27 @@ class Response(object):
 ##`---------------
 _request = Request()
 _response = Response()
+_app = Cyanbird()
+
+
+def route(url, method="GET"):
+    return _app.route(url, method=method)
+
+
+def get(url):
+    return _app.get(url)
+
+
+def post(url):
+    return _app.post(url)
+
+
+def put(url):
+    return _app.put(url)
+
+
+def delete(url):
+    return _app.delete(url)
 
 
 def response(body):
@@ -471,7 +504,7 @@ def render(file, params):
 
 
 # server
-# def run(host="127.0.0.1", port=8080, server="wsgiref"):
+# def run(app=None, host="127.0.0.1", port=8080, server="wsgiref", debug=False, reload=False):
 #     try:
 #         f = _ADAPTER[server]
 #     except KeyError:
