@@ -157,6 +157,28 @@ def _add_slash(url, end=True):
     return url
 
 
+##,-----------------
+##| Cyanbird Servers
+##`-----------------
+class ServerAdapter(object):
+    def __init__(self, host="127.0.0.1", port=8080, debug=False, reload=False):
+        self.host, self.port = host, port
+        self.debug, self.reload = debug, reload
+
+    def __repl__(self):
+        return "Cyanbird runs at http://%s:%s" % (self.host, self.port)
+
+    def run(self):
+        pass
+
+
+class WSGIRefServer(ServerAdapter):
+    def run(self, handler):
+        from wsgiref.simple_server import make_server
+        server = make_server(app=handler, host=self.host, port=self.port)
+        server.serve_forever()
+
+
 ##,--------------
 ##| Cyanbird main
 ##`--------------
@@ -220,9 +242,10 @@ class Cyanbird(object):
     def __call__(self, env, start_response):
         return self.wsgi(env, start_response)
 
-    def run(self, host="127.0.0.1", port=8080, debug=False, reload=False):
-        from wsgiref.simple_server import make_server
-        make_server(app=self, host=host, port=port).serve_forever()
+    def run(self, server=WSGIRefServer, host="127.0.0.1", port=8080,
+            debug=False, reload=False):
+        return run(app=self, server=server, host=host, port=port,
+                   debug=debug, reload=reload)
 
 
 ##,------------------
@@ -362,6 +385,46 @@ class Response(object):
 
 
 ##,---------------
+##| Cyanbird Route
+##`---------------
+class Route(object):
+    def __init__(self, re_url, f, method="GET"):
+        self.url = re_url
+        self.re_url = re.compile(r"^%s$" % _add_slash(re_url))
+        self.f = f
+        self.method = method
+        self.params = {}
+
+    def match(self, request):
+        if isinstance(self.method, str):
+            if self.method.upper() != request.method:
+                raise Exception("Method %s not allowed." % self.method)
+        if isinstance(self.method, list):
+            if request.method not in self.method:
+                raise Exception("Methods %s not allowed." % self.method)
+        match = self.re_url.search(request.path)
+        if match is not None:
+            self.params.update(match.groupdict())
+            return True
+        return None
+
+    def dispatch(self, request):
+        return self.f(request, **self.params)
+
+
+##,-----------------------
+##| Cyanbird Errors Object
+##`-----------------------
+class Error(object):
+    def __init__(self, code, f):
+        self.status_code = code
+        self.f = f
+
+    def __call__(self):
+        return self.f()
+
+
+##,---------------
 ##| Cyanbird basic
 ##`---------------
 _request = Request()
@@ -412,46 +475,6 @@ def http_error(code, body=""):
     return _response
 
 
-##,---------------
-##| Cyanbird Route
-##`---------------
-class Route(object):
-    def __init__(self, re_url, f, method="GET"):
-        self.url = re_url
-        self.re_url = re.compile(r"^%s$" % _add_slash(re_url))
-        self.f = f
-        self.method = method
-        self.params = {}
-
-    def match(self, request):
-        if isinstance(self.method, str):
-            if self.method.upper() != request.method:
-                raise Exception("Method %s not allowed." % self.method)
-        if isinstance(self.method, list):
-            if request.method not in self.method:
-                raise Exception("Methods %s not allowed." % self.method)
-        match = self.re_url.search(request.path)
-        if match is not None:
-            self.params.update(match.groupdict())
-            return True
-        return None
-
-    def dispatch(self, request):
-        return self.f(request, **self.params)
-
-
-##,-----------------------
-##| Cyanbird Errors Object
-##`-----------------------
-class Error(object):
-    def __init__(self, code, f):
-        self.status_code = code
-        self.f = f
-
-    def __call__(self):
-        return self.f()
-
-
 # serve static files
 def _check_file(file, dir):
     """ Check if the given file has the permission.
@@ -491,27 +514,13 @@ def render(file, params):
     return resp
 
 
-# adapter
-# def wsgiref_adapter(app, host, port):
-#     """ The standard built-in wsgiref adapter.
-#     """
-#     from wsgiref.simple_server import make_server
-#     make_server(app=app, host=host, port=port).serve_forever()
-
-# _ADAPTER = {
-#     "wsgiref": wsgiref_adapter,
-# }
-
-
-# server
-# def run(app=None, host="127.0.0.1", port=8080, server="wsgiref", debug=False, reload=False):
-#     try:
-#         f = _ADAPTER[server]
-#     except KeyError:
-#         raise KeyError("The server %s is not exists!" % server)
-#     try:
-#         print("Please visit http//:%s:%s" % (host, port))
-#         print("Press Ctrl+c Ctrl+c to interrupt")
-#         # f(application_handler, host, port)
-#     except KeyboardInterrupt:
-#         print("Shuting down.")
+def run(app=_app, server=WSGIRefServer, host="127.0.0.1", port=8080,
+        debug=False, reload=False):
+    try:
+        print("Cyanbird v%s is running." % __version__)
+        print("Please visit http://%s:%s" % (host, port))
+        print("Press Ctrl-c Ctrl-c to interrupt.")
+        server = server(host=host, port=port, debug=debug, reload=reload)
+        server.run(app)
+    except KeyboardInterrupt:
+        print("Shuting down.")
