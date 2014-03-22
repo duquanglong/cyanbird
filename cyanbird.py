@@ -438,23 +438,33 @@ _app = Cyanbird()
 
 
 def route(url, method="GET"):
+    """ Route decorator. """
     return _app.route(url, method=method)
 
 
 def get(url):
+    """ Get decorator. """
     return _app.get(url)
 
 
 def post(url):
+    """ Post decorator. """
     return _app.post(url)
 
 
 def put(url):
+    """ Put decorator. """
     return _app.put(url)
 
 
 def delete(url):
+    """ Delete decorator. """
     return _app.delete(url)
+
+
+def error(code):
+    """ Error decorator. """
+    return _app.error(code)
 
 
 def response(body):
