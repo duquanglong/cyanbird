@@ -4,7 +4,6 @@ __version__ = "0.20"
 __author__ = "Zhao Wei <kaihaosw@gmail.com>"
 import re
 import os
-from functools import wraps
 from cgi import FieldStorage
 from datetime import datetime
 import time
@@ -29,7 +28,7 @@ class HTTPError(CyanBirdException):
         self.status_code, self.msg = code, msg
 
     def __str__(self):
-        return self.status_code, self.msg
+        return "HTTPError %s: %s" % (self.status_code, self.msg)
 
 
 ##,---------------
@@ -110,19 +109,6 @@ class MultiValueDict(dict):
         return list(self.itervalues())
 
 
-def lazyproperty(f):
-    """ Class decorator which evals only once. """
-    attr_name = "_lazy_" + f.__name__
-
-    @property
-    @wraps(f)
-    def wrapper(self):
-        if not hasattr(self, attr_name):
-            setattr(self, attr_name, f(self))
-        return getattr(self, attr_name)
-    return wrapper
-
-
 def _parse_qs(s):
     """ Parse a query_string and return a MultidictValue type dict. """
     qs = parse_qs(s, keep_blank_values=True)
@@ -192,20 +178,32 @@ class Cyanbird(object):
             return f
         return wrapper
 
-    def wsgi(self, env, start_response):
-        request = Request(env)
+    def routes_match(self, request):
         for route in self.routes:
             if route.match(request) is not None:
-                resp = route.dispatch(request)
+                return route.dispatch(request)
+        raise HTTPError(404, "Not Found")
+
+    def wsgi(self, env, start_response):
+        _request.bind(env)
+        try:
+            resp = self.routes_match(_request)
+            if not isinstance(resp, Response):
+                return response(resp)(start_response)
+            return resp(start_response)
+        except Exception as e:
+            if isinstance(e, HTTPError):
+                status_code = int(e.status_code)
+            else:
+                status_code = 500
+            try:
+                resp = self.errors[status_code]()
                 if not isinstance(resp, Response):
-                    response = Response()
-                    response.write(resp)
-                    return response(start_response)
+                    return http_error(status_code, resp)(start_response)
                 return resp(start_response)
-        resp = self.errors[404]()
-        response = Response(404)
-        response.write(resp)
-        return response(start_response)
+            except Exception:
+                pass
+        return http_error(404, "Not Found")(start_response)
 
     def __call__(self, env, start_response):
         return self.wsgi(env, start_response)
@@ -220,34 +218,34 @@ class Cyanbird(object):
 ##`------------------
 class Request(object):
     """ Request object which handlers the `environ`. """
-    def __init__(self, env):
-        self.env = env
-
     def __setitem__(self, key, value):
         self.env[key] = value
 
-    @lazyproperty
+    def bind(self, env):
+        self.env = env
+
+    @property
     def ctype(self):
         return self.env["CONTENT_TYPE"]
 
-    @lazyproperty
+    @property
     def clength(self):
         return int(self.env.get("CONTENT_LENGTH", "0"))
 
-    @lazyproperty
+    @property
     def method(self):
         return self.env.get("REQUEST_METHOD", "GET").upper()
 
-    @lazyproperty
+    @property
     def path(self):
         return _add_slash(quote(self.env.get("SCRIPT_NAME", "")) +
                           quote(self.env.get("PATH_INFO", "")))
 
-    @lazyproperty
+    @property
     def args(self):
         return _parse_qs(self.env.get("QUERY_STRING", ""))
 
-    @lazyproperty
+    @property
     def cookies(self):
         if not hasattr(self, "_cookies"):
             self._cookies = SimpleCookie()
@@ -263,13 +261,13 @@ class Request(object):
             return self.cookies[key].value
         return default
 
-    @lazyproperty
+    @property
     def forms(self):
         if not hasattr(self, "_forms"):
             self._load_body()
         return self._forms
 
-    @lazyproperty
+    @property
     def file(self):
         if not hasattr(self, "_file"):
             self._load_body()
@@ -307,7 +305,7 @@ _HTTP_STATUS = {
 
 
 class Response(object):
-    def __init__(self, code=200, content_type="text/html; charset=UTF-8"):
+    def bind(self, code=200, content_type="text/html; charset=UTF-8"):
         self.status = _HTTP_STATUS.get(code, "UNKNOWN")
         self.headers = [("Content-Type", content_type)]
         self._response = []
@@ -351,35 +349,34 @@ class Response(object):
         return self._response
 
 
+##,---------------
+##| Cyanbird basic
+##`---------------
+_request = Request()
+_response = Response()
+
+
 def response(body):
-    """ Return a response for `200 OK` response.
-    """
-    resp = Response()
-    resp.write(body)
-    return resp
+    """ Return a response for `200 OK` response. """
+    _response.bind()
+    _response.write(body)
+    return _response
 
 
 def redirect(url):
-    """ Return a response for an HTTP `302 redirect`.
-    """
-    resp = Response(code=302)
-    resp.redirect(url)
-    return resp
+    """ Return a response for an HTTP `302 redirect`. """
+    _response.bind(302)
+    _response.redirect(url)
+    return _response
 
 
 def http_error(code, body=""):
-    """ Return a error based on the status_code.
-    """
+    """ Return a error based on the status_code. """
     assert code >= 400 and code <= 505
-    resp = Response(code=code)
+    _response.bind(code)
     if code == 404:
-        resp.write(body)
-    return resp
-
-bad_request = http_error(400)
-forbidden = http_error(403)
-not_found = http_error(404, body="Not Found")
-abort = http_error(500)
+        _response.write(body)
+    return _response
 
 
 ##,---------------
@@ -420,84 +417,6 @@ class Error(object):
 
     def __call__(self):
         return self.f()
-
-# handler
-_REQUEST_MAPPINGS = {
-    "GET": [],
-    "POST": []
-}
-
-_ERROR_MAPPINGS = {}
-
-
-# app
-def _match_url(request):
-    if request.method not in _REQUEST_MAPPINGS:
-        raise Exception("The request method: %s is not supported." %
-                        request.method)
-    for re_url, callback in _REQUEST_MAPPINGS[request.method]:
-        match = re_url.search(request.path)
-        if match is not None:
-            return re_url, callback, match.groupdict()
-    raise HTTPError(404, "Not Found")
-
-
-def application_handler(env, start_response):
-    """ The handler for request and response.
-    """
-    request = Request(env)
-    try:
-        re_url, callback, kwargs = _match_url(request)
-        if callback is not None:
-            resp = callback(request, **kwargs)
-            if not isinstance(resp, Response):
-                response = Response()
-                response.write(resp)
-                return response(start_response)
-            return resp(start_response)
-    except Exception as e:
-        if isinstance(e, HTTPError):
-            status_code = getattr(e, "status_code", 404)
-        else:
-            status_code = 500
-        if status_code in _ERROR_MAPPINGS:
-            resp = Response(code=404)
-            resp.write(_ERROR_MAPPINGS[status_code]())
-            return resp(start_response)
-    return not_found(start_response)
-
-
-# route decorators
-def _route_abstract(method, url, base=""):
-    if base:
-        url = _add_slash(base, end=False) + _add_slash(url)
-    else:
-        url = _add_slash(url)
-
-    def wrapper(f):
-        re_url = re.compile(r"^%s$" % url)
-        _REQUEST_MAPPINGS[method].append((re_url, f))
-    return wrapper
-
-
-def GET(url, base=""):
-    """ The `GET` wrapper.
-    """
-    return _route_abstract("GET", url, base=base)
-
-
-def POST(url, base=""):
-    """ The `POST` wrapper.
-    """
-    return _route_abstract("POST", url, base=base)
-
-
-def error(code):
-    """ The 'error' wrapper.
-    """
-    def wrapper(f):
-        _ERROR_MAPPINGS[code] = f
-    return wrapper
 
 
 # serve static files
@@ -540,26 +459,26 @@ def render(file, params):
 
 
 # adapter
-def wsgiref_adapter(app, host, port):
-    """ The standard built-in wsgiref adapter.
-    """
-    from wsgiref.simple_server import make_server
-    make_server(app=app, host=host, port=port).serve_forever()
+# def wsgiref_adapter(app, host, port):
+#     """ The standard built-in wsgiref adapter.
+#     """
+#     from wsgiref.simple_server import make_server
+#     make_server(app=app, host=host, port=port).serve_forever()
 
-_ADAPTER = {
-    "wsgiref": wsgiref_adapter,
-}
+# _ADAPTER = {
+#     "wsgiref": wsgiref_adapter,
+# }
 
 
 # server
-def run(host="127.0.0.1", port=8080, server="wsgiref"):
-    try:
-        f = _ADAPTER[server]
-    except KeyError:
-        raise KeyError("The server %s is not exists!" % server)
-    try:
-        print("Please visit http//:%s:%s" % (host, port))
-        print("Press Ctrl+c Ctrl+c to interrupt")
-        f(application_handler, host, port)
-    except KeyboardInterrupt:
-        print("Shuting down.")
+# def run(host="127.0.0.1", port=8080, server="wsgiref"):
+#     try:
+#         f = _ADAPTER[server]
+#     except KeyError:
+#         raise KeyError("The server %s is not exists!" % server)
+#     try:
+#         print("Please visit http//:%s:%s" % (host, port))
+#         print("Press Ctrl+c Ctrl+c to interrupt")
+#         # f(application_handler, host, port)
+#     except KeyboardInterrupt:
+#         print("Shuting down.")
