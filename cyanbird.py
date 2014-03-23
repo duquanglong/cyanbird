@@ -12,7 +12,6 @@ from urlparse import parse_qs
 from urllib import quote
 from Cookie import SimpleCookie
 from cStringIO import StringIO as BytesIO
-from string import Template
 
 
 ##,-------------------------------
@@ -244,6 +243,27 @@ class Cyanbird(object):
     def __call__(self, env, start_response):
         return self.wsgi(env, start_response)
 
+    def serve_file(self, file, dir, mimetype=""):
+        s = ServeFile(file=file, dir=dir, mimetype=mimetype)
+        try:
+            if s.check():
+                return s.serve()
+        # TODO abstract
+        except Exception as e:
+            print e
+            if isinstance(e, HTTPError):
+                status_code = int(e.status_code)
+            else:
+                status_code = 500
+            try:
+                resp = self.errors[status_code]()
+                if not isinstance(resp, Response):
+                    return http_error(status_code, resp)(start_response)
+                return resp(start_response)
+            except Exception:
+                pass
+        return http_error(404, "Not Found")(start_response)
+
     def run(self, server=WSGIRefServer, host="127.0.0.1", port=8080,
             debug=False, reload=False):
         return run(app=self, server=server, host=host, port=port,
@@ -334,6 +354,7 @@ _HTTP_STATUS = {
     304: "304 Not Modified",
     307: "307 Temporary Redirect",
     400: "400 Bad Request",
+    401: "401 Unauthorized",
     403: "403 Forbidden",
     404: "404 Not Found",
     405: "405 Method Not Allowed",
@@ -429,6 +450,40 @@ class Error(object):
         return self.f()
 
 
+# TODO WSGIHandler
+
+
+##,----------------------------
+##| Cyanbird Serve Static Files
+##`----------------------------
+class ServeFile(object):
+    """ Serve the static file. """
+    def __init__(self, file, dir, mimetype=""):
+        self.file = file
+        self.dir = os.path.abspath(dir)
+        self.serve_file = os.path.realpath(os.path.join(self.dir, self.file))
+        self.ctype = mimetype or mimetypes.guess_type(self.serve_file)[0] or "text/plain"
+
+    def check(self):
+        if not self.serve_file.startswith(self.dir):
+            raise HTTPError(401, "Access denied.")
+        if not os.path.exists(self.serve_file):
+            raise HTTPError(404, "File not exists.")
+        if not os.access(self.serve_file, os.R_OK):
+            raise HTTPError(403, "No Permission.")
+        return True
+
+    def serve(self):
+        f = BytesIO()
+        f.write(open(self.serve_file, "rb").read())
+        _response.bind(content_type=self.ctype)
+        _response.write(f.getvalue())
+        return _response
+
+
+# TODO Template
+
+
 ##,---------------------------
 ##| Cyanbird application basic
 ##`---------------------------
@@ -490,40 +545,20 @@ def http_error(code, body=""):
     return _response
 
 
-# serve static files
-def _check_file(file, dir):
-    """ Check if the given file has the permission. """
-    base_path = os.path.abspath(dir)
-    serve_file = os.path.realpath(os.path.join(base_path, file))
-    if not serve_file.startswith(base_path):
-        raise Exception("Operation denied.")
-    if not os.path.exists(serve_file):
-        raise Exception("File %s not exists." % file)
-    if not os.access(serve_file, os.R_OK):
-        raise Exception("Have no access to read %s." % file)
-    return serve_file
-
-
 def serve_file(file, dir, mimetype=""):
-    """ Serve a static file. """
-    serve_file = _check_file(file, dir)
-    ctype = mimetype or mimetypes.guess_type(serve_file)[0] or "text/plain"
-    f = BytesIO()
-    f.write(open(serve_file, "r").read())
-    resp = Response(content_type=ctype)
-    resp.write(f.getvalue())
-    return resp
+    """ Serve the static file. """
+    return _app.serve_file(file=file, dir=dir, mimetype=mimetype)
 
 
-def render(file, params):
-    """ Simple template using the built-in string.Template """
-    dirname, filename = os.path.split(file)
-    serve_file = _check_file(filename, dirname)
-    ctype = mimetypes.guess_type(serve_file)[0] or "text/plain"
-    s = Template(open(serve_file, "r").read()).substitute(params)
-    resp = Response(content_type=ctype)
-    resp.write(s)
-    return resp
+# def render(file, params):
+#     """ Simple template using the built-in string.Template """
+#     dirname, filename = os.path.split(file)
+#     serve_file = _check_file(filename, dirname)
+#     ctype = mimetypes.guess_type(serve_file)[0] or "text/plain"
+#     s = Template(open(serve_file, "r").read()).substitute(params)
+#     resp = Response(content_type=ctype)
+#     resp.write(s)
+#     return resp
 
 
 def run(app=_app, server=WSGIRefServer, host="127.0.0.1", port=8080,
