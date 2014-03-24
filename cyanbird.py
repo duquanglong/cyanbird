@@ -248,9 +248,8 @@ class Cyanbird(object):
         try:
             if s.check():
                 return s.serve()
-        # TODO abstract
-        except Exception as e:
-            print e
+        except Exception:
+            pass
 
     def run(self, server=WSGIRefServer, host="127.0.0.1", port=8080,
             debug=False, reload=False):
@@ -347,7 +346,8 @@ _HTTP_STATUS = {
     404: "404 Not Found",
     405: "405 Method Not Allowed",
     410: "410 Gone",
-    500: "500 Internal Server Error"}
+    500: "500 Internal Server Error"
+}
 
 
 class Response(object):
