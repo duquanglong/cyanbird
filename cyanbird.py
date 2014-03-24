@@ -213,16 +213,16 @@ class Cyanbird(object):
             return f
         return wrapper
 
-    def routes_match(self, request):
+    def _routes_match(self, request):
         for route in self.routes:
             if route.match(request) is not None:
                 return route.dispatch(request)
         raise HTTPError(404, "Not Found")
 
-    def wsgi(self, env, start_response):
+    def _wsgi(self, env, start_response):
         _request.bind(env)
         try:
-            resp = self.routes_match(_request)
+            resp = self._routes_match(_request)
             if not isinstance(resp, Response):
                 return response(resp)(start_response)
             return resp(start_response)
@@ -241,7 +241,7 @@ class Cyanbird(object):
         return http_error(404, "Not Found")(start_response)
 
     def __call__(self, env, start_response):
-        return self.wsgi(env, start_response)
+        return self._wsgi(env, start_response)
 
     def serve_file(self, file, dir, mimetype=""):
         s = ServeFile(file=file, dir=dir, mimetype=mimetype)
@@ -251,18 +251,6 @@ class Cyanbird(object):
         # TODO abstract
         except Exception as e:
             print e
-            if isinstance(e, HTTPError):
-                status_code = int(e.status_code)
-            else:
-                status_code = 500
-            try:
-                resp = self.errors[status_code]()
-                if not isinstance(resp, Response):
-                    return http_error(status_code, resp)(start_response)
-                return resp(start_response)
-            except Exception:
-                pass
-        return http_error(404, "Not Found")(start_response)
 
     def run(self, server=WSGIRefServer, host="127.0.0.1", port=8080,
             debug=False, reload=False):
