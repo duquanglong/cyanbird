@@ -3,7 +3,7 @@ __license__ = "MIT"
 __version__ = "0.20"
 __author__ = "Zhao Wei <kaihaosw@gmail.com>"
 import re
-import os
+import os.path
 from cgi import FieldStorage
 from datetime import datetime
 import time
@@ -28,6 +28,14 @@ class HTTPError(CyanBirdException):
 
     def __str__(self):
         return "HTTPError %s: %s" % (self.status_code, self.msg)
+
+
+class TemplateException(Exception):
+    def __init__(self, msg):
+        self.msg = msg
+
+    def __str__(self):
+        return self.msg
 
 
 ##,---------------
@@ -438,9 +446,6 @@ class Error(object):
         return self.f()
 
 
-# TODO WSGIHandler
-
-
 ##,----------------------------
 ##| Cyanbird Serve Static Files
 ##`----------------------------
@@ -450,7 +455,8 @@ class ServeFile(object):
         self.file = file
         self.dir = os.path.abspath(dir)
         self.serve_file = os.path.realpath(os.path.join(self.dir, self.file))
-        self.ctype = mimetype or mimetypes.guess_type(self.serve_file)[0] or "text/plain"
+        self.ctype = mimetype or mimetypes.guess_type(self.serve_file)[0] or \
+            "text/plain"
 
     def check(self):
         if not self.serve_file.startswith(self.dir):
@@ -469,7 +475,18 @@ class ServeFile(object):
         return _response
 
 
-# TODO Template
+##,-------------------
+##| Cyanbird Templates
+##`-------------------
+# TODO
+#  @foo
+#  #if ... :
+#  #elif ... :
+#  #end
+#  #for @foo in @foos:
+#  #include
+class Template(object):
+    pass
 
 
 ##,---------------------------
