@@ -52,7 +52,7 @@ class HTTPError(CyanBirdException):
         return "HTTPError %s: %s" % (self.status_code, self.msg)
 
 
-class TemplateException(Exception):
+class TemplateError(Exception):
     """ Basic Exception for Template. """
     def __init__(self, msg):
         self.msg = msg
@@ -501,22 +501,96 @@ class ServeFile(object):
 ##,-------------------
 ##| Cyanbird Templates
 ##`-------------------
-# TODO
-#  @foo
-#  #if ... :
-#  #elif ... :
-#  #end
-#  #for @foo in @foos:
-#  #include
-class Template(object):
+var_start = "{{"
+var_end = "}}"
+comment_start = "{#"
+comment_end = "#}"
+block_start = "{%"
+block_end = "%}"
+
+template_tag_regex = re.compile("(%s.*?%s|%s.*?%s|%s.*?%s)(?uism)" % (
+    re.escape(var_start), re.escape(var_end),
+    re.escape(comment_start), re.escape(comment_end),
+    re.escape(block_start), re.escape(block_end)))
+
+
+class _BaseTemplate(object):
+    def __init__(self, text):
+        self.text = text
+
+    def _type(self, tag):
+        tag = tag.strip()
+        if tag.startswith(var_start):
+            return "<var>"
+        elif tag.startswith(block_start):
+            return "<block>"
+        elif tag.startswith(comment_start):
+            return "<comment>"
+        else:
+            return "<text>"
+
+    def _clean(self, tag):
+        # TODO
+        return tag[2:-2].strip()
+
+    def parse(self):
+        nodelist = NodeList()
+        for tag in template_tag_regex.split(self.text):
+            if self._type(tag) == "<text>":
+                nodelist.append(_TextNode(tag))
+            elif self._type(tag) == "<var>":
+                nodelist.append(_VarNode(self._clean(tag)))
+            elif self._type(tag) == "<block>":
+                #TODO
+                pass
+            elif self._type(tag) == "<comment>":
+                pass
+            else:
+                raise TemplateError("Parsing %s error.")
+        return nodelist
+
+
+class NodeList(list):
+    def render(self, context):
+        bits = []
+        for node in self:
+            if isinstance(node, _Node):
+                bits.append(node.render(context))
+            else:
+                bits.append(node)
+        return "".join(bits)
+
+
+class _Node(object):
+    def __init__(self, text):
+        self.text = text
+
+
+class _TextNode(_Node):
+    def render(self, context):
+        return self.text
+
+
+class _VarNode(_Node):
+    def render(self, context):
+        return self.lookup(self.text, context)
+
+    def lookup(self, key, context):
+        # TODO foo.bar
+        try:
+            return context[key]
+        except Exception:
+            raise TemplateError("Variable %s not found." % key)
+
+
+class Template(_BaseTemplate):
     """ Template System for Cyanbird. """
     def __init__(self, text):
-        pass
+        self.text = text
 
-    def render(self):
-        pass
-
-
+    def render(self, context):
+        nodelist = self.parse()
+        return nodelist.render(context)
 ##,---------------------------
 ##| Cyanbird application basic
 ##`---------------------------
